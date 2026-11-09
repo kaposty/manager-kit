@@ -1,0 +1,79 @@
+{
+  "_comment": [
+    "Plugin wiring. Paths resolve through ${CLAUDE_PLUGIN_ROOT}, because a plugin lives",
+    "outside the project it serves.",
+    "",
+    "Three carriers for one identity, and the reason is measured rather than aesthetic.",
+    "A running auto-compaction fires SessionStart NOT AT ALL, and after a manual /compact",
+    "the reinject can lose the race against the next message. UserPromptSubmit cannot lose",
+    "a race, so it carries the one line. The guard is the last carrier: its refusal names",
+    "the role, and nobody can forget to call it.",
+    "",
+    "The subagent launch carries BOTH names of one tool, and that is measured rather than",
+    "belt and braces. The runtime hands the hook tool_name 'Agent': 4335 of 4335 real",
+    "launches on the machine this was built on, 2026-11-02, and not one 'Task'. 'Task' is",
+    "the name the tool used to have, and a matcher that spells it still selects the tool,",
+    "because the matcher list is canonicalised through a legacy alias table before it is",
+    "compared. Naming only the old spelling would make this wiring depend on a",
+    "compatibility shim nobody promised to keep; naming only the new one would miss a host",
+    "that still sends the old payload. Both cost nothing."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write|MultiEdit|NotebookEdit|Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/role-guard.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "Agent|Task",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/route-guard.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "startup|clear",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/manager-prime.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "matcher": "compact|resume|fork",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/manager-reinject.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "\"${CLAUDE_PLUGIN_ROOT}\"/hooks/manager-stamp.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  }
+}

@@ -1,0 +1,13 @@
+# List prices in dollars per million tokens, read by tools/mk-cost.sh. One row per model, tab separated.
+# A row "<model>><tokens>" is a second tier: its prices hold for every part of a request whose input,
+# cache read and cache write together are MORE than <tokens>. as_of is the day the source was read.
+# A model that is not here is an unknown model to the meter: above 1 percent of the rounds it prints no number.
+model	input	write_5m	write_1h	read	output	as_of	source
+claude-opus-5-5	4	5	8	0.2	20	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-opus-5	5	6.25	10	0.5	25	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-opus-4-8	5	6.25	10	0.5	25	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-sonnet-5-5	2	2.5	4	0.1	10	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-sonnet-5	2	2.5	4	0.2	10	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-haiku-5-5	0.1	0.125	0.2	0.01	0.5	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-haiku-5-5>100000	0.5	0.625	1	0.05	2.5	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
+claude-haiku-4-5-20251001	1	1.25	2	0.1	5	2026-11-06	platform.claude.com/docs/en/about-claude/pricing
