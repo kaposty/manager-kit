@@ -3932,118 +3932,25 @@ MUTATIONS = [
     # THE BYTES of --causes, which its report check reads with its blanks squeezed and so cannot see: one column wider.
     ("mk-cost prints the five reports without --context as at be9243b", "tools/mk-cost.sh",
      'fmt = "%-28s %7s %12s %10s %6s %13s %11s"', 'fmt = "%-29s %7s %12s %10s %6s %13s %11s"'),
-    # MK-E3, THE CONTEXT LINE AND THE LOOP LINE: one entry or more per assertion of the nine checks, each turning back one
-    # rule of hooks/_notice.sh or of where the two hooks call it. Every anchor counted as a Python substring against its
-    # file: 1.
-    # THE CROSSING: a line at the cap itself, a line every call past it, no second line after a fall, a <synthetic> round
-    # read as a fall to 0, the stamp on a record of its own, the stamp that never says it, the line without the pause.
-    ("the context line comes once per crossing of the cap", "hooks/_notice.sh",
-     "        if ctx > cap and not above:\n", "        if ctx >= cap and not above:\n"),
-    ("the context line comes once per crossing of the cap", "hooks/_notice.sh",
-     "        if ctx > cap and not above:\n", "        if ctx > cap:\n"),
-    ("the context line comes once per crossing of the cap", "hooks/_notice.sh",
-     "        elif ctx <= cap:\n            above = False\n", "        elif False:\n            above = False\n"),
-    ("the context line comes once per crossing of the cap", "hooks/_notice.sh",
-     'isinstance(m.get("usage"), dict) and m.get("model") != "<synthetic>":', 'isinstance(m.get("usage"), dict):'),
-    ("the context line comes once per crossing of the cap", "hooks/manager-stamp.sh",
-     'note=$(mk_kit_notice "$ROOT" "$SESSION_ID" ', 'note=$(mk_kit_notice "$ROOT" "$SESSION_ID-prompt" '),
-    ("the context line comes once per crossing of the cap", "hooks/manager-stamp.sh",
-     '  [ -z "$note" ] || line=$line$MK_NL$note\n', '  :\n'),
-    ("the context line comes once per crossing of the cap", "hooks/_notice.sh",
-     "%s. The person can compact at the next pause.\" % (ctx, cap, why)", "%s.\" % (ctx, cap, why)"),
-    # THE LOOP: 8 rounds read as too few, 150000 as over, a line every call of one loop, once a session instead of once a
-    # loop, a tool result as an input, a summary and a meta line as an input, a line of a streamed answer as a round, the
-    # stamp counting a loop that is over, and the line without the input it counts from.
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     'rounds >= int(env["MK_LOOP_ROUNDS"])', 'rounds > int(env["MK_LOOP_ROUNDS"])'),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     'ctx > int(env["MK_LOOP_CONTEXT"])', 'ctx >= int(env["MK_LOOP_CONTEXT"])'),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     "    if loop and key is not None and key != said_loop and ", "    if loop and key is not None and "),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     "    if loop and key is not None and key != said_loop and ", "    if loop and key is not None and said_loop is None and "),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     '        return not any(isinstance(b, dict) and b.get("type") == "tool_result" for b in c)\n', "        return True\n"),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     ' or d.get("isCompactSummary") is True:', ":"),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     ' or d.get("isMeta") is True or ', " or "),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     '                        keys.add((str(m.get("id")), str(d.get("requestId") or "")))\n',
-     "                        keys.add(len(keys))\n"),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     '    loop = event == "PreToolUse"\n', "    loop = True\n"),
-    ("the loop line comes once a loop from 8 rounds over 150k", "hooks/_notice.sh",
-     "has run %d rounds since the last input, at", "has run %d rounds, at"),
-    # THE CAP: the variable not read, an unreadable value not named, a digit that is no ASCII digit read as one, 0 as a
-    # cap like any other, an empty value named as unreadable.
-    ("the context cap is read from MANAGER_KIT_CONTEXT_CAP", "hooks/_notice.sh",
-     '    raw = env.get("MANAGER_KIT_CONTEXT_CAP", "").strip()\n', '    raw = ""\n'),
-    ("the context cap is read from MANAGER_KIT_CONTEXT_CAP", "hooks/_notice.sh",
-     '            why = " (MANAGER_KIT_CONTEXT_CAP is no whole number of tokens, so the default is used)"\n',
-     '            why = ""\n'),
-    ("the context cap is read from MANAGER_KIT_CONTEXT_CAP", "hooks/_notice.sh",
-     "        if raw.isascii() and raw.isdigit():\n", "        if raw.isdigit():\n"),
-    ("the context cap is read from MANAGER_KIT_CONTEXT_CAP", "hooks/_notice.sh",
-     "    if cap > 0:\n", "    if cap >= 0:\n"),
-    ("the context cap is read from MANAGER_KIT_CONTEXT_CAP", "hooks/_notice.sh",
-     "    if raw:\n", '    if raw or "MANAGER_KIT_CONTEXT_CAP" in env:\n'),
-    # WHO IS TOLD: a hand, a carrier at a call and at a prompt, a home directory, and a project with no role file whose
-    # stamp answers manager.
-    ("the context and loop lines go to the manager and to nobody else", "hooks/role-guard.sh",
-     'if [ -n "$AGENT_ID" ] && [ "$AGENT_ID" != "$SESSION_ID" ]; then\n  exit 0\n',
-     'if [ -n "$AGENT_ID" ] && [ "$AGENT_ID" != "$SESSION_ID" ]; then\n  mk_project_root_set "${CWD:-$PWD}"; mk_kit_notice "$MK_ROOT" "$SESSION_ID" "${TRANSCRIPT-}" PreToolUse\n  exit 0\n'),
-    ("the context and loop lines go to the manager and to nobody else", "hooks/role-guard.sh",
-     'if [ "$(mk_guard_role "$ROOT" "$SESSION_ID")" = carrier ]; then\n  exit 0\n',
-     'if [ "$(mk_guard_role "$ROOT" "$SESSION_ID")" = carrier ]; then\n  mk_kit_notice "$ROOT" "$SESSION_ID" "${TRANSCRIPT-}" PreToolUse\n  exit 0\n'),
-    ("the context and loop lines go to the manager and to nobody else", "hooks/manager-stamp.sh",
-     "  line='manager-kit: you are a carrier here, not the manager. Do the work you were given.'\n",
-     "  line='manager-kit: you are a carrier here, not the manager. Do the work you were given.'\n  line=$line$MK_NL$(mk_kit_notice \"$ROOT\" \"$SESSION_ID\" \"${TRANSCRIPT-}\" UserPromptSubmit)\n"),
-    ("the context and loop lines go to the manager and to nobody else", "hooks/_notice.sh",
-     '  mk_record_home "${1-}" || return 0\n', "  :\n"),
-    ("the context and loop lines go to the manager and to nobody else", "hooks/manager-stamp.sh",
-     'note=$(mk_kit_notice "$ROOT" ', 'note=$(mk_kit_usable "$rf" && mk_kit_notice "$ROOT" '),
-    # SILENCE: a pipe waited on, a broken last line that hides the round before it, a long record and a foreign one used
-    # and written, and a record nobody can write that buys a line on every call.
-    ("the lines are silent on what they cannot read and keep the refusal", "hooks/_notice.sh",
-     "    fd = os.open(path, os.O_RDONLY | os.O_NONBLOCK)\n", "    fd = os.open(path, os.O_RDONLY)\n"),
-    ("the lines are silent on what they cannot read and keep the refusal", "hooks/_notice.sh",
-     "                except ValueError:\n                    continue\n",
-     "                except ValueError:\n                    return None, 0, None\n"),
-    ("the lines are silent on what they cannot read and keep the refusal", "hooks/_notice.sh",
-     '    if len(data) > int(env["MK_KIT_SMALL"]):\n        return []\n', "    if False:\n        return []\n"),
-    ("the lines are silent on what they cannot read and keep the refusal", "hooks/_notice.sh",
-     '        if not isinstance(was, dict) or set(was) != {"session", "above", "loop"}:\n',
-     "        if not isinstance(was, dict):\n"),
-    ("the lines are silent on what they cannot read and keep the refusal", "hooks/_notice.sh",
-     "            fd = mk_file(home, name, os.O_WRONLY | os.O_CREAT | os.O_EXCL)\n",
-     '            fd = os.open("/dev/null", os.O_WRONLY)\n'),
-    # THE REFUSAL: a line put out after it, and a line spent by it without a word.
-    ("the refusal is the same whether a line is due or not", "hooks/role-guard.sh",
-     "printf '%s\\n' \"$out\"\nexit 0\n",
-     "printf '%s\\n' \"$out\"\nmk_kit_notice \"$ROOT\" \"$SESSION_ID\" \"${TRANSCRIPT-}\" PreToolUse\nexit 0\n"),
-    ("the refusal is the same whether a line is due or not", "hooks/role-guard.sh",
-     "NOTE=\nif [ \"$NO_RECORD\" = 0 ] && ",
-     "mk_kit_notice \"$ROOT\" \"$SESSION_ID\" \"${TRANSCRIPT-}\" PreToolUse >/dev/null\nNOTE=\nif [ \"$NO_RECORD\" = 0 ] && "),
-    # THE TIME: a reader that goes back to the start of the file, in steps, with no reach.
-    ("the lines cost under 100 ms on a transcript past 1 GB", "hooks/_notice.sh",
-     "        while pos > 0 and end - pos < reach:\n", "        while pos > 0:\n"),
-    # MK-ZEIT: 80 ms in the reader on every call that has a transcript, which puts the extra at about 146 against 100. Small
-    # on purpose: the entry above reads the whole file, and the stretch of the check (at most 3, and 1 when quiet) could
-    # excuse a small one under load but must not on the quiet of a run of its own.
-    ("the lines cost under 100 ms on a transcript past 1 GB", "hooks/_notice.sh",
-     "        while pos > 0 and end - pos < reach:\n",
-     "        __import__(\"time\").sleep(0.08)\n        while pos > 0 and end - pos < reach:\n"),
-    # THE DOCUMENTS: a default the documents do not name, and a README that does not name the variable.
-    ("the documents say how to set the context cap", "hooks/_notice.sh",
-     "MK_CONTEXT_CAP_DEFAULT=300000\n", "MK_CONTEXT_CAP_DEFAULT=310000\n"),
-    ("the documents say how to set the context cap", "README.md",
-     "Set your own with\n`MANAGER_KIT_CONTEXT_CAP` in whole tokens", "Set your own with\na variable in whole tokens"),
-    # THE EXCLUSION: the record made without writing the exclusion, and the name left out of the one list.
-    ("the record of the lines is kept out of a commit", "hooks/_notice.sh",
-     "        if made:\n            mk_exclude(root)\n", "        if False:\n            mk_exclude(root)\n"),
-    ("the record of the lines is kept out of a commit", "hooks/_sessions.sh",
-     'MK_KIT_IGNORE += (b"/.claude/manager-kit.notice",)', "MK_KIT_IGNORE += ()"),
+    # MK-NOTIZ-WEG, THE KIT SAYS NOTHING TO THE MANAGER OF COMPACT, OF ITS CONTEXT OR OF ITS LOOP: one entry per assertion of
+    # the one check. Every anchor counted as a Python substring against its file: 1.
+    # THE GUARD ON A CALL IT LETS THROUGH: a line put out where there was none (the shape of the old context line), and the
+    # line of the verdict taken out, which hands every call to the refusal.
+    ("the kit tells the manager nothing of compact, its context or its loop", "hooks/role-guard.sh",
+     '[ "$verdict" = work ] || exit 0\n',
+     '[ "$verdict" = work ] || { printf \'%s\\n\' \'{"suppressOutput": true, "hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "manager-kit: the context is 400000 tokens, over the cap of 300000. The person can compact at the next pause."}}\'; exit 0; }\n'),
+    ("the kit tells the manager nothing of compact, its context or its loop", "hooks/role-guard.sh",
+     '[ "$verdict" = work ] || exit 0\n', ':\n'),
+    # THE STAMP AT A PROMPT: a line under the role line (the shape of the old loop line, with the pause).
+    ("the kit tells the manager nothing of compact, its context or its loop", "hooks/manager-stamp.sh",
+     "  line='manager-kit: you are the manager here. Bookkeeping is .claude/ and *.md, everything else is handed out.'\n",
+     "  line='manager-kit: you are the manager here. Bookkeeping is .claude/ and *.md, everything else is handed out.'\n"
+     "  line=$line$MK_NL'manager-kit: your own tool loop has run 20 rounds since the last input, at 900000 tokens of context. The person can compact at the next pause.'\n"),
+    # THE RIGHT BEHAVIOUR OF THE SAME SHAPE: the role line of the manager, and the refusal of a work write.
+    ("the kit tells the manager nothing of compact, its context or its loop", "hooks/manager-stamp.sh",
+     "you are the manager here. Bookkeeping", "you are here. Bookkeeping"),
+    ("the kit tells the manager nothing of compact, its context or its loop", "hooks/role-guard.sh",
+     '[ "$verdict" = work ] || exit 0\n', 'exit 0\n'),
 ]
 
 

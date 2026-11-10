@@ -16,7 +16,6 @@ set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$HERE/_classify.sh"
 . "$HERE/_sessions.sh"
-. "$HERE/_notice.sh"
 
 input=$(cat)
 
@@ -38,7 +37,6 @@ say("AGENT_ID", d.get("agent_id"))
 say("TOOL", d.get("tool_name"))
 say("FPATH", ti.get("file_path") or ti.get("notebook_path"))
 say("CMD", ti.get("command"))
-say("TRANSCRIPT", d.get("transcript_path"))
 ') && [ -n "$parsed" ] || {
   printf '%s\n' '{"systemMessage":"manager-kit: the role guard is inert, python3 is on PATH but does not run."}'
   exit 0
@@ -158,10 +156,7 @@ case "$TOOL" in
   Bash) verdict=$(classify_bash "$CMD"); subject=$CMD ;;
   *)    verdict=$(classify_path "$FPATH"); subject=$FPATH ;;
 esac
-# A CALL THAT IS LET THROUGH MAY CARRY THE CONTEXT LINE OR THE LOOP LINE, and only this one: the refusal below
-# stays what it was to the byte whether a line is due or not, and a line that is due waits for the next call that
-# passes. hooks/_notice.sh has when a line is due and why it is said once.
-[ "$verdict" = work ] || { mk_kit_notice "$ROOT" "$SESSION_ID" "${TRANSCRIPT-}" PreToolUse; exit 0; }
+[ "$verdict" = work ] || exit 0
 
 NOTE=
 if [ "$NO_RECORD" = 0 ] && { [ -e "$MARKER" ] || [ -L "$MARKER" ]; }; then

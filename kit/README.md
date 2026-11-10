@@ -62,10 +62,9 @@ The kit does three things about that. It leaves two to you.
   the record line is a short fixed text, never the command.
 - **It makes a new log private.** A log this kit makes has mode 0600. A log that was already
   there keeps its mode and its lines: nothing in it is rewritten or blacked out afterwards.
-- **It writes five lines into `.git/info/exclude`**, once, when it makes the log:
+- **It writes four lines into `.git/info/exclude`**, once, when it makes the log:
   `/.claude/manager-kit.log*`,
-  `/.claude/manager-kit.seen`, `/.claude/manager-kit.role`, `/.claude/manager-exception` and
-  `/.claude/manager-kit.notice`, and the missing ones again when it makes the notice record. That
+  `/.claude/manager-kit.seen`, `/.claude/manager-kit.role` and `/.claude/manager-exception`. That
   file belongs to the repository and not to the working tree, so the lines show in no `git status`,
   go into no commit and travel to no clone. It writes them only when `.git` is a directory inside
   the project. A `.git` that is a file or a link (a linked worktree, a submodule) is not followed
@@ -789,17 +788,10 @@ where it comes from: S the context after a compaction, g the mean growth per rou
 compaction, measured, plus the compaction call, estimated, and r the read price; without a compaction it gives no C*,
 only the reason.
 
-**It tells the main session once when its context passes the cap, and once when its own loop runs long.** A hook cannot
-compact; you can. So the manager is told one short line through `additionalContext`, which reaches the model and is no
-chat message, that you can compact at the next pause: when the context of its last round passes the cap, and again only
-after it fell back under the cap and passed it anew; and when its own tool loop since your last input reaches 8 rounds
-while the context is over 150000, and again only in the loop after your next input. A hand and a carrier get no line.
-The cap is 300000 tokens, the measured cap of the machine this was built on, rounded. Set your own with
-`MANAGER_KIT_CONTEXT_CAP` in whole tokens, in the environment Claude Code starts in; a value that is no whole number
-falls back to 300000 and the line says so, and 0 turns the context line off (the loop line stays). Your own number is the
-`C*` that `/manager-kit:cost --context` prints for your machine. What it reads is the end of the transcript, at most 4 MB,
-and what it said is kept in `.claude/manager-kit.notice`; a transcript it cannot read, or a record that is no plain file
-of its own, gives no line and changes no refusal.
+**The kit says nothing to the manager about compacting or about the size of its context.** Whether and when to compact is
+yours. What the kit gives on that subject is a report when you ask for it, `/manager-kit:cost --context`, and at a session
+start the role text notes when `DISABLE_AUTO_COMPACT` is not set in your project; neither is a message about the context
+of the session that reads it.
 
 ## The stop on a hand, and who watches it
 
@@ -959,9 +951,8 @@ gap in a hand's definition only.
 | `.claude/manager-kit.role` | which session currently holds the coordinating role |
 | `.claude/manager-kit.seen` | the date of the day the guard last proved it ran, one line |
 | `.claude/manager-exception` | you write it, the guard spends it |
-| `.claude/manager-kit.notice` | which context and loop line the main session was last told, one JSON line, only once a line was said |
 
-The log is kept out of a commit by the kit itself, with mode 0600, and all five files with
+The log is kept out of a commit by the kit itself, with mode 0600, and all four files with
 lines in `.git/info/exclude`; what that covers and what it leaves to you is under Install. They
 are yours to put in `.gitignore` wherever the kit did not write its lines, rotated
 `manager-kit.log.*` files included. Leaving a tracked file

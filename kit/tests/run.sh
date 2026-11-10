@@ -16267,7 +16267,6 @@ for path in sys.argv[1:]:
             continue
         names.update(re.findall(r"mk_kit_(?:write|spend)\s+\"[^\"]*\"\s+([A-Za-z][A-Za-z0-9._-]*)", line))
         names.update(re.findall(r"MK_LOG_NAME\s*=\s*\"([^\"]+)\"", line))
-        names.update(re.findall(r"MK_NOTICE_NAME\s*=\s*\"([^\"]+)\"", line))
 print("\n".join(sorted(names)))
 PY
 }
@@ -18713,384 +18712,98 @@ check 'mk-cost --context goes with the window and with no other report'         
 check 'the cost command says what --context prints'                                         cost_context_is_named_by_the_command
 check 'mk-cost prints the five reports without --context as at be9243b'                     cost_reports_print_their_bytes_without_context
 check 'mk-cost prints the table and the three reports without --causes as at 92b9152'        cost_reports_print_their_bytes_without_causes
-# ---- MK-E3, THE CONTEXT LINE AND THE LOOP LINE ----------------------------------------------------------------------
-# The main session hears of its own context once per crossing of the cap C, and of its own tool loop once per loop
-# from 8 rounds at a context over 150000, as one line through additionalContext. Every number below is read out of
-# hooks/_notice.sh, so a moved bound moves the fixtures with it.
-e3_num() { sed -n "s/^$1=\([0-9][0-9]*\)\$/\1/p" hooks/_notice.sh 2>/dev/null; }
-e3_bounds() {
-  E3_CAP=$(e3_num MK_CONTEXT_CAP_DEFAULT); E3_ROUNDS=$(e3_num MK_LOOP_ROUNDS); E3_LOOPCTX=$(e3_num MK_LOOP_CONTEXT)
-  [ -n "$E3_CAP" ] && [ -n "$E3_ROUNDS" ] && [ -n "$E3_LOOPCTX" ] || {
-    echo "hooks/_notice.sh names no MK_CONTEXT_CAP_DEFAULT, MK_LOOP_ROUNDS or MK_LOOP_CONTEXT"; return 1; }
-  E3_SOCKS=$(mktemp -d)
-}
-# e3_tx <file> <token>... -> a transcript. in: an input; tr: a tool result; meta: a line Claude Code adds; summary: the
-# summary after a compaction; r<n>: one round of context n, streamed as two lines of one answer; syn: a <synthetic>
-# round; broken: half a round of a huge context, and the file ends there when it is the last token.
-e3_tx() {
+# ---- MK-NOTIZ-WEG, THE KIT SAYS NOTHING TO THE MANAGER OF COMPACT, OF ITS CONTEXT OR OF ITS LOOP ------------------------
+# Up to b000532 the guard, on a call it let through, and the stamp, at a prompt, put a line under the role line of the
+# manager once its context passed 300000 tokens and once its own tool loop reached 8 rounds over 150000, and both lines said
+# that the person can compact at the next pause. Compact is the business of the person, and the kit has nothing to do with
+# the checkpoint kit, so the kit says nothing of it. This check sends a manager whose transcript is past the old cap, or in
+# a loop past the old bound, or both, through the real hooks and holds that neither says a word of compact, of the context
+# or of the loop. What it types is the SHAPE of the two old lines (compact, tool loop, N tokens, context, cap) and not their
+# numbers, so a line reworded for another bound still has to get past it. A role line that one day says "context" or "cap" is
+# red here, on purpose: whoever writes it reads this comment first.
+nz_transcript() {  # <file> <rounds> <context> -> one input, then that many rounds with a tool result after each
   python3 -I - "$@" <<'PY'
 import json, sys
-out, n = [], 0
-for tok in sys.argv[2:]:
-    n += 1
-    u = {"uuid": "u%d" % n, "sessionId": "S1", "timestamp": "2026-11-08T10:00:%02dZ" % (n % 60)}
-    if tok == "in":
-        out.append(dict(u, type="user", message={"role": "user", "content": "go on"}))
-    elif tok == "tr":
-        out.append(dict(u, type="user", message={"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t%d" % n, "content": "ok"}]}))
-    elif tok == "meta":
-        out.append(dict(u, type="user", isMeta=True, message={"role": "user", "content": "caveat"}))
-    elif tok == "summary":
-        out.append(dict(u, type="user", isCompactSummary=True, message={"role": "user", "content": "summary"}))
-    elif tok == "broken":
-        out.append('{"type": "assistant", "requestId": "rb", "message": {"id": "mb", "model": "claude-opus-5-5", "usage": {"input_tokens": 3, "cache_read_input_tokens": 999999')
-    else:
-        model = "<synthetic>" if tok == "syn" else "claude-opus-5-5"
-        ctx = 0 if tok == "syn" else int(tok[1:])
-        usage = {"input_tokens": 3, "cache_read_input_tokens": ctx - 1003 if ctx > 1003 else 0,
-                 "cache_creation_input_tokens": 1000 if ctx > 1003 else ctx, "output_tokens": 40}
-        for part in (1, 2):
-            out.append(dict(u, uuid="u%d-%d" % (n, part), type="assistant", requestId="req%d" % n,
-                            message={"id": "msg%d" % n, "model": model, "role": "assistant",
-                                     "content": [{"type": "text", "text": "x"}], "usage": usage}))
-with open(sys.argv[1], "w") as fh:
-    for i, row in enumerate(out):
-        fh.write(row if isinstance(row, str) else json.dumps(row))
-        if not (isinstance(row, str) and i == len(out) - 1):
-            fh.write("\n")
+path, rounds, ctx = sys.argv[1], int(sys.argv[2]), int(sys.argv[3])
+rows = [{"type": "user", "uuid": "u0", "sessionId": "S1", "message": {"role": "user", "content": "go on"}}]
+for n in range(1, rounds + 1):
+    usage = {"input_tokens": 3, "cache_read_input_tokens": ctx - 1003, "cache_creation_input_tokens": 1000, "output_tokens": 40}
+    rows.append({"type": "assistant", "uuid": "a%d" % n, "requestId": "req%d" % n, "sessionId": "S1",
+                 "message": {"id": "msg%d" % n, "model": "claude-opus-5-5", "role": "assistant",
+                             "content": [{"type": "text", "text": "x"}], "usage": usage}})
+    rows.append({"type": "user", "uuid": "r%d" % n, "sessionId": "S1",
+                 "message": {"role": "user", "content": [{"type": "tool_result", "tool_use_id": "t%d" % n, "content": "ok"}]}})
+with open(path, "w") as fh:
+    for row in rows:
+        fh.write(json.dumps(row) + "\n")
 PY
 }
-# e3_loop <file> <rounds> <context> [token]... -> the tokens, then one input and that many rounds, a tool result
-# between two of them, which is what a loop of the session's own tool calls looks like.
-e3_loop() {
-  _f=$1; _n=$2; _c=$3; shift 3
-  set -- "$@" in
-  _i=0; while [ "$_i" -lt "$_n" ]; do set -- "$@" "r$_c" tr; _i=$((_i + 1)); done
-  e3_tx "$_f" "$@"
-}
-e3_repo() { _er=$(newrepo); printf '%s S1\n' "$$" > "$_er/.claude/manager-kit.role"; printf '%s' "$_er"; }
-# e3_guard <project> <transcript> [session] [agent] [tool input] -> what the guard said to the model on a call it lets
-# through, one line per notice, nothing when it said nothing. A refusal is printed as REFUSED.
-e3_guard() {
+nz_repo() { _nr=$(newrepo); printf '%s S1\n' "$$" > "$_nr/.claude/manager-kit.role"; printf '%s' "$_nr"; }
+# nz_run <hook> <event> <project> <transcript> [command] -> what the hook printed, as the manager S1 of the project
+nz_run() {
   python3 -I -c '
 import json, sys
-print(json.dumps({"hook_event_name": "PreToolUse", "cwd": sys.argv[1], "transcript_path": sys.argv[2], "session_id": sys.argv[3],
-                  "agent_id": sys.argv[4], "tool_name": "Bash", "tool_input": {"command": sys.argv[5]}}))' \
-    "$1" "$2" "${3:-S1}" "${4-}" "${5:-ls}" |
-  MANAGER_KIT_SOCKET_DIR=$E3_SOCKS ./hooks/role-guard.sh | e3_said PreToolUse
+print(json.dumps({"hook_event_name": sys.argv[1], "cwd": sys.argv[2], "transcript_path": sys.argv[3], "session_id": "S1",
+                  "agent_id": "", "tool_name": "Bash", "tool_input": {"command": sys.argv[4]}, "prompt": "go on"}))' \
+    "$2" "$3" "$4" "${5-ls}" | MANAGER_KIT_SOCKET_DIR=$NZ_SOCKS ./hooks/$1
 }
-# e3_guard_bounded <project> <transcript> -> e3_guard with 8 seconds to answer, in a process group of its own that
-# is killed whole when it does not: a guard held by a pipe would otherwise leave its reader behind.
-e3_guard_bounded() {
-  python3 -I - "$1" "$2" "$E3_SOCKS" "$ROOT/hooks/role-guard.sh" <<'PY' | e3_said PreToolUse
-import json, os, signal, subprocess, sys
-d, t, socks, hook = sys.argv[1:]
-p = subprocess.Popen([hook], stdin=subprocess.PIPE, stdout=subprocess.PIPE, start_new_session=True,
-                     env=dict(os.environ, MANAGER_KIT_SOCKET_DIR=socks))
-payload = {"hook_event_name": "PreToolUse", "cwd": d, "transcript_path": t, "session_id": "S1", "agent_id": "",
-           "tool_name": "Bash", "tool_input": {"command": "ls"}}
-try:
-    out, _ = p.communicate(json.dumps(payload).encode(), timeout=8)
-except subprocess.TimeoutExpired:
-    os.killpg(p.pid, signal.SIGKILL)
-    p.wait()
-    out = json.dumps({"hookSpecificOutput": {"hookEventName": "PreToolUse", "additionalContext": "HELD"}}).encode()
-sys.stdout.write(out.decode())
-PY
-}
-# e3_stamp <project> <transcript> [session] -> the lines of the stamp after its role line.
-e3_stamp() {
-  python3 -I -c '
-import json, sys
-print(json.dumps({"hook_event_name": "UserPromptSubmit", "cwd": sys.argv[1], "transcript_path": sys.argv[2],
-                  "session_id": sys.argv[3], "prompt": "go on"}))' "$1" "$2" "${3:-S1}" |
-  MANAGER_KIT_SOCKET_DIR=$E3_SOCKS ./hooks/manager-stamp.sh | e3_said UserPromptSubmit
-}
-e3_said() {
-  python3 -I -c '
+# nz_lines <what a hook printed> -> the text lines in its JSON values, not its keys, and not the two values that only name
+# a kind (hookEventName, permissionDecision); a hook that printed nothing gives none
+nz_lines() {
+  printf '%s' "$1" | python3 -I -c '
 import json, sys
 raw = sys.stdin.read()
-if not raw.strip():
-    sys.exit(0)
-d = json.loads(raw)
-h = d.get("hookSpecificOutput") or {}
-if h.get("hookEventName") != sys.argv[1]:
-    sys.exit("answered for %r" % h.get("hookEventName"))
-if h.get("permissionDecision"):
-    print("REFUSED")
-    sys.exit(0)
-lines = (h.get("additionalContext") or "").split("\n")
-if sys.argv[1] == "UserPromptSubmit":
-    lines = lines[1:]
-for l in lines:
-    if l:
-        print(l)' "$1"
-}
-e3_count() { printf '%s\n' "$2" | grep -c "^manager-kit: $1" ; }
-e3_want() {  # <what> <count of the context line> <count of the loop line> <said>
-  _c=$(e3_count 'the context is' "$4"); _l=$(e3_count 'your own tool loop' "$4")
-  [ "$_c" = "$2" ] && [ "$_l" = "$3" ] && return 0
-  echo "$1: $_c context and $_l loop lines, expected $2 and $3:"; printf '%s\n' "$4" | sed 's/^/    /'; return 1
-}
-
-the_context_line_comes_once_per_crossing_of_the_cap() {
-  e3_bounds || return 1
-  bad=0; d=$(e3_repo); w=$(mktemp -d); t=$w/t.jsonl
-  e3_tx "$t" in r$((E3_CAP - 1000)) r$E3_CAP
-  e3_want 'at the cap' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_tx "$t" in r$E3_CAP r$((E3_CAP + 1))
-  s=$(e3_guard "$d" "$t"); e3_want 'one token past the cap' 1 0 "$s" || bad=1
-  case $s in *"context is $((E3_CAP + 1)) tokens, over the cap of $E3_CAP. "*"The person can compact at the next pause."*) ;;
-    *) echo "the line does not carry the context, the cap and the pause: $s"; bad=1 ;; esac
-  e3_want 'the second call past the cap' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_want 'the next prompt past the cap' 0 0 "$(e3_stamp "$d" "$t")" || bad=1
-  e3_tx "$t" in r$((E3_CAP + 1)) summary r50000
-  e3_want 'back under the cap after a compaction' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_tx "$t" in r$((E3_CAP + 1)) summary r50000 r$((E3_CAP + 5))
-  e3_want 'past the cap again, at a prompt' 1 0 "$(e3_stamp "$d" "$t")" || bad=1
-  e3_want 'past the cap again, the next call' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  # A <synthetic> round carries no context, and reading it as a fall to 0 would buy a second line.
-  e3_tx "$t" in r$((E3_CAP + 5)) syn
-  e3_want 'a synthetic round last, after one past the cap' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_tx "$t" in r$((E3_CAP + 5)) syn r$((E3_CAP + 6))
-  e3_want 'a synthetic round between two past the cap' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  return $bad
-}
-
-the_loop_line_comes_once_a_loop_from_8_rounds_over_150k() {
-  e3_bounds || return 1
-  bad=0; w=$(mktemp -d); t=$w/t.jsonl; over=$((E3_LOOPCTX + 1))
-  d=$(e3_repo); e3_loop "$t" $((E3_ROUNDS - 1)) $over
-  e3_want "$((E3_ROUNDS - 1)) rounds over $E3_LOOPCTX" 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_loop "$t" $E3_ROUNDS $over
-  s=$(e3_guard "$d" "$t"); e3_want "$E3_ROUNDS rounds over $E3_LOOPCTX" 0 1 "$s" || bad=1
-  case $s in *"has run $E3_ROUNDS rounds since the last input, at $over tokens of context."*) ;;
-    *) echo "the loop line does not carry the rounds and the context: $s"; bad=1 ;; esac
-  e3_loop "$t" $((E3_ROUNDS + 1)) $over
-  e3_want "$((E3_ROUNDS + 1)) rounds, the same loop" 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_loop "$t" $E3_ROUNDS $over r$over tr r$over
-  e3_want 'a new input and again as many rounds' 0 1 "$(e3_guard "$d" "$t")" || bad=1
-  for n in $((E3_ROUNDS - 1)) $E3_ROUNDS $((E3_ROUNDS + 1)); do
-    d=$(e3_repo); e3_loop "$t" $n $E3_LOOPCTX
-    e3_want "$n rounds at $E3_LOOPCTX" 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  done
-  d=$(e3_repo); e3_loop "$t" $((E3_ROUNDS + 1)) $over
-  e3_want 'the loop at a prompt' 0 0 "$(e3_stamp "$d" "$t")" || bad=1
-  # A tool result, a line Claude Code adds and the summary of a compaction continue the loop; a streamed answer is one
-  # round. Half the rounds, the three lines, the other half.
-  h=$((E3_ROUNDS / 2)); set -- in
-  i=0; while [ $i -lt $h ]; do set -- "$@" r$over tr; i=$((i + 1)); done
-  set -- "$@" meta summary
-  i=0; while [ $i -lt $((E3_ROUNDS - h)) ]; do set -- "$@" r$over tr; i=$((i + 1)); done
-  d=$(e3_repo); e3_tx "$t" "$@"
-  e3_want 'a loop across a meta line and a summary' 0 1 "$(e3_guard "$d" "$t")" || bad=1
-  return $bad
-}
-
-the_context_cap_is_read_from_its_variable() {
-  e3_bounds || return 1
-  bad=0; w=$(mktemp -d); t=$w/t.jsonl
-  d=$(e3_repo); e3_tx "$t" in r200001
-  s=$(MANAGER_KIT_CONTEXT_CAP=200000 e3_guard "$d" "$t"); e3_want 'a cap of 200000 at 200001' 1 0 "$s" || bad=1
-  case $s in *"over the cap of 200000. "*) ;; *) echo "the set cap is not the one named: $s"; bad=1 ;; esac
-  d=$(e3_repo); e3_tx "$t" in r200000
-  e3_want 'a cap of 200000 at 200000' 0 0 "$(MANAGER_KIT_CONTEXT_CAP=200000 e3_guard "$d" "$t")" || bad=1
-  for v in abc 2e5 -5 ' 12 x' '٣٠٠' 300000.0; do
-    d=$(e3_repo); e3_tx "$t" in r$E3_CAP
-    e3_want "the unreadable cap '$v' at the default" 0 0 "$(MANAGER_KIT_CONTEXT_CAP=$v e3_guard "$d" "$t")" || bad=1
-    e3_tx "$t" in r$((E3_CAP + 1))
-    s=$(MANAGER_KIT_CONTEXT_CAP=$v e3_guard "$d" "$t"); e3_want "the unreadable cap '$v' past the default" 1 0 "$s" || bad=1
-    case $s in *"over the cap of $E3_CAP (MANAGER_KIT_CONTEXT_CAP is no whole number of tokens, so the default is used). "*) ;;
-      *) echo "the unreadable cap '$v' is not named: $s"; bad=1 ;; esac
-  done
-  d=$(e3_repo); e3_tx "$t" in r$((E3_CAP + 1))
-  s=$(MANAGER_KIT_CONTEXT_CAP= e3_guard "$d" "$t"); e3_want 'an empty cap' 1 0 "$s" || bad=1
-  case $s in *MANAGER_KIT_CONTEXT_CAP*) echo "an empty cap is named as unreadable: $s"; bad=1 ;; esac
-  d=$(e3_repo); e3_loop "$t" $E3_ROUNDS 9999999
-  e3_want 'a cap of 0 far past any cap, in a long loop' 0 1 "$(MANAGER_KIT_CONTEXT_CAP=0 e3_guard "$d" "$t")" || bad=1
-  return $bad
-}
-
-the_lines_go_to_the_manager_and_to_nobody_else() {
-  e3_bounds || return 1
-  bad=0; w=$(mktemp -d); t=$w/t.jsonl
-  d=$(e3_repo); e3_loop "$t" $E3_ROUNDS $((E3_CAP + 1))
-  e3_want 'a hand' 0 0 "$(e3_guard "$d" "$t" S1 AGENT9)" || bad=1
-  e3_want 'a carrier at a call' 0 0 "$(e3_guard "$d" "$t" S2)" || bad=1
-  e3_want 'a carrier at a prompt' 0 0 "$(e3_stamp "$d" "$t" S2)" || bad=1
-  e3_want 'the manager' 1 1 "$(e3_guard "$d" "$t")" || bad=1
-  # A home directory keeps no record, so no line could be said only once.
-  h=$(newrepo)
-  e3_want 'a home directory' 0 0 "$(HOME=$h e3_guard "$h" "$t")" || bad=1
-  [ ! -e "$h/.claude/manager-kit.notice" ] || { echo 'a home directory was given a notice record'; bad=1; }
-  # A project with no record of a role: the line follows the role the stamp answers, as the role line does.
-  d=$(newrepo); s=$(e3_stamp "$d" "$t")
-  role=$(python3 -I -c 'import json,sys; print(json.dumps({"cwd": sys.argv[1], "session_id": "S1", "transcript_path": sys.argv[2]}))' "$d" "$t" |
-         MANAGER_KIT_SOCKET_DIR=$E3_SOCKS ./hooks/manager-stamp.sh > "$w/o"; stamp_role "$w/o")
-  if [ "$role" = manager ]; then want=1; else want=0; fi
-  e3_want "a project with no role file, told $role" $want 0 "$s" || bad=1
-  return $bad
-}
-
-the_line_is_silent_on_what_it_cannot_read_and_keeps_the_refusal() {
-  e3_bounds || return 1
-  bad=0; w=$(mktemp -d); t=$w/t.jsonl
-  for shape in missing empty directory pipe; do
-    d=$(e3_repo); f=$w/$shape
-    case $shape in empty) : > "$f" ;; directory) mkdir "$f" ;; pipe) mkfifo "$f" ;; esac
-    s=$(e3_guard_bounded "$d" "$f")
-    e3_want "a transcript that is $shape" 0 0 "$s" || bad=1
-    case $s in *HELD*) echo "a transcript that is $shape held the guard"; bad=1 ;; esac
-    [ "$(e3_guard "$d" "$f" S1 '' 'echo x > src/a.py')" = REFUSED ] || { echo "a transcript that is $shape lost the refusal"; bad=1; }
-  done
-  d=$(e3_repo); e3_tx "$t" in r1000 broken
-  e3_want 'a broken last line after a small round' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  d=$(e3_repo); e3_tx "$t" in r$((E3_CAP + 1)) broken
-  e3_want 'a broken last line after a round past the cap' 1 0 "$(e3_guard "$d" "$t")" || bad=1
-  # A record that is not the kit's own is neither used nor written: a link, a directory, a long file, a foreign one.
-  e3_tx "$t" in r$((E3_CAP + 1))
-  for shape in link directory long foreign; do
-    d=$(e3_repo); o=$(mktemp -d); n=$d/.claude/manager-kit.notice
-    case $shape in
-      link) printf 'PRECIOUS\n' > "$o/x"; ln -s "$o/x" "$n" ;;
-      directory) mkdir "$n" ;;
-      long) python3 -I -c 'import sys; open(sys.argv[1], "w").write("{\"session\": \"S1\", \"above\": false, \"loop\": null}" + " " * 5000)' "$n" ;;
-      foreign) printf '{"mine": "not the kit"}\n' > "$n" ;;
-    esac
-    before=$(ls -l "$n"; cat "$n" "$o/x" 2>/dev/null | cksum)
-    e3_want "a record that is a $shape" 0 0 "$(e3_guard "$d" "$t")" || bad=1
-    e3_want "a record that is a $shape, again" 0 0 "$(e3_guard "$d" "$t")" || bad=1
-    [ "$(ls -l "$n"; cat "$n" "$o/x" 2>/dev/null | cksum)" = "$before" ] || { echo "a record that is a $shape was changed"; bad=1; }
-    [ "$(e3_guard "$d" "$t" S1 '' 'echo x > src/a.py')" = REFUSED ] || { echo "a record that is a $shape lost the refusal"; bad=1; }
-  done
-  # A .claude nothing can be written in: no record, so no line, and twice no line.
-  d=$(e3_repo); chmod 555 "$d/.claude"
-  e3_want 'a .claude that cannot be written' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  e3_want 'a .claude that cannot be written, again' 0 0 "$(e3_guard "$d" "$t")" || bad=1
-  chmod 755 "$d/.claude"
-  return $bad
-}
-
-the_refusal_is_the_same_whether_a_line_is_due_or_not() {
-  e3_bounds || return 1
-  bad=0; w=$(mktemp -d); t=$w/t.jsonl; e3_loop "$t" $E3_ROUNDS $((E3_CAP + 1))
-  d=$(e3_repo)
-  for cmd in 'echo x > src/a.py' 'echo why > .claude/manager-exception; echo x > src/a.py'; do
-    for with in none due; do
-      rm -rf "$d"; mkdir -p "$d/.claude" "$d/src"; printf '%s S1\n' "$$" > "$d/.claude/manager-kit.role"
-      case $with in none) tp=$w/none.jsonl ;; due) tp=$t ;; esac
-      python3 -I -c '
-import json, sys
-print(json.dumps({"hook_event_name": "PreToolUse", "cwd": sys.argv[1], "transcript_path": sys.argv[2], "session_id": "S1",
-                  "agent_id": "", "tool_name": "Bash", "tool_input": {"command": sys.argv[3]}}))' "$d" "$tp" "$cmd" |
-        MANAGER_KIT_SOCKET_DIR=$E3_SOCKS ./hooks/role-guard.sh > "$w/$with"
-    done
-    cmp -s "$w/none" "$w/due" || { echo "the refusal of '$cmd' differs when a line is due:"; diff "$w/none" "$w/due" | sed 's/^/    /'; bad=1; }
-    grep -q '"permissionDecision": "deny"' "$w/due" || { echo "'$cmd' was not refused"; bad=1; }
-    # The refusal spent no line: the next call it lets through says both.
-    e3_want "the call after the refusal of '$cmd'" 1 1 "$(e3_guard "$d" "$t")" || bad=1
-  done
-  return $bad
-}
-
-the_line_costs_under_100_ms_on_a_transcript_past_1_gb() {
-  e3_bounds || return 1
-  w=$(mktemp -d); d=$(e3_repo)
-  # Sparse: a hole of 1.1 GB, then rounds with no input in reach, which is the longest the reader goes. A byte
-  # written into the hole every megabyte cost 546 MB of disk on APFS [measured 2026-11-08], so the hole stays one
-  # line, and the reader keeps no more of a line than it reaches. Made and removed in this check.
-  python3 -I - "$w/big.jsonl" "$d" "$E3_SOCKS" "$ROOT/hooks/role-guard.sh" "$ROOT/hooks/manager-stamp.sh" <<'PY'
-import json, os, signal, subprocess, sys, time
-exec(os.environ["ZEIT_PY"])
-big, d, socks, guard, stamp = sys.argv[1:]
-try:
-    with open(big, "wb") as fh:
-        fh.truncate(1100 * 1024 * 1024)
-        fh.seek(0, 2)
-        for n in range(20):
-            usage = {"input_tokens": 3, "cache_read_input_tokens": 400000, "cache_creation_input_tokens": 1000, "output_tokens": 9}
-            fh.write((json.dumps({"type": "assistant", "requestId": "q%d" % n, "message": {"id": "m%d" % n, "model": "claude-opus-5-5", "usage": usage}}) + "\n").encode())
-    if os.stat(big).st_blocks * 512 > 64 * 1024 * 1024:
-        sys.exit("the transcript is not sparse here, %d bytes on disk" % (os.stat(big).st_blocks * 512))
-    env = dict(os.environ, MANAGER_KIT_SOCKET_DIR=socks)
-    def took(hook, event, path):
-        payload = {"hook_event_name": event, "cwd": d, "transcript_path": path, "session_id": "S1", "agent_id": "",
-                   "tool_name": "Bash", "tool_input": {"command": "ls"}, "prompt": "go on"}
-        t0 = time.perf_counter()
-        p = subprocess.Popen([hook], stdin=subprocess.PIPE, stdout=subprocess.PIPE, env=env, start_new_session=True)
-        try:
-            out, _ = p.communicate(json.dumps(payload).encode(), timeout=30)
-        except subprocess.TimeoutExpired:
-            os.killpg(p.pid, signal.SIGKILL)
-            p.wait()
-            out = b""
-        took.out = out.decode()
-        return time.perf_counter() - t0
-    bad = 0
-    # The guard comes first and says the line, so what is timed is the path that reads, not one that left early.
-    for hook, event in ((guard, "PreToolUse"), (stamp, "UserPromptSubmit")):
-        took(hook, event, big)
-        if hook == guard and "manager-kit: the context is 401003 tokens" not in took.out:
-            print("the guard did not say the line on the 1.1 GB transcript: %r" % took.out[:300])
-            bad = 1
-        # The two paths are asked in turn, so a load that comes and goes lands on both, and each is its best: a load only
-        # adds. A load that stays is answered by zeit_within, which holds the extra against 100 ms stretched by the machine.
-        def more(f):
-            with_, without = [], []
-            for _ in range(7):
-                with_.append(took(hook, event, big))
-                without.append(took(hook, event, ""))
-            more.seen = (min(with_), min(without))
-            return min(with_) - min(without)
-        inside, extra, f, used = zeit_within(more, 0.100, "wall")
-        print("%s: %.0f ms with the 1.1 GB transcript, %.0f ms without, %.0f ms more against 100%s" % (
-            os.path.basename(hook), more.seen[0] * 1000, more.seen[1] * 1000, extra * 1000,
-            "" if f == 1.0 else ", the machine %.1f times slower than quiet, %d tries" % (f, used)))
-        if not inside:
-            bad = 1
-    sys.exit(bad)
-finally:
+def walk(v):
+    if isinstance(v, str):
+        for l in v.split("\n"):
+            if l:
+                print(l)
+    elif isinstance(v, dict):
+        for k, x in v.items():
+            if k not in ("hookEventName", "permissionDecision"):
+                walk(x)
+    elif isinstance(v, list):
+        for x in v:
+            walk(x)
+if raw.strip():
     try:
-        os.unlink(big)
-    except OSError:
-        pass
-PY
+        walk(json.loads(raw))
+    except ValueError:
+        print(raw)'
+}
+# nz_hits <what a hook printed> -> the lines of it that speak of compact, of tokens, of the context, of a cap or of a tool loop
+nz_hits() {
+  nz_lines "$1" | grep -E -i -e 'compact' -e 'tool loop' -e '[0-9] tokens' -e '(^|[^a-z])context([^a-z]|$)' -e '(^|[^a-z])cap([^a-z]|$)'
 }
 
-the_documents_say_how_to_set_the_context_cap() {
-  e3_bounds || return 1
-  bad=0
-  for f in README.md GUIDE.md; do
-    for want in MANAGER_KIT_CONTEXT_CAP "/$KITP:cost --context" "$E3_CAP" "$E3_LOOPCTX"; do
-      grep -qF -- "$want" "$f" || { echo "$f does not say $want"; bad=1; }
-    done
+the_kit_tells_the_manager_nothing_of_compact_its_context_or_its_loop() {
+  bad=0; w=$(mktemp -d); NZ_SOCKS=$(mktemp -d)
+  # Three transcripts, each of which was past the old line it names: both together, one token past the cap with a loop of
+  # 3, and 8 rounds at one token past 150000 with a context under the cap.
+  for shape in 'both 20 900000' 'cap 3 300001' 'loop 8 150001'; do
+    set -- $shape; name=$1; t=$w/$1.jsonl
+    nz_transcript "$t" "$2" "$3"
+    # A PROJECT OF ITS OWN FOR EACH HOOK: the old lines were said once per session and kept in the project, so the guard
+    # run first used them up and the stamp that followed in the same project said nothing, which a check run in one project
+    # reads as a stamp that was never at fault.
+    g=$(nz_run role-guard.sh PreToolUse "$(nz_repo)" "$t" ls)
+    # A call the guard lets through gets NOTHING from it: the header of role-guard.sh says so, and a guard that stops saying
+    # it either speaks (the old lines) or refuses a call that is no work write.
+    [ -z "$g" ] || { echo "$name: the guard said this on a call it lets through, where it says nothing at all:"; nz_lines "$g" | sed 's/^/    /'; bad=1; }
+    s=$(nz_run manager-stamp.sh UserPromptSubmit "$(nz_repo)" "$t")
+    hits=$(nz_hits "$s"); [ -z "$hits" ] || { echo "$name: the stamp said this at a prompt:"; printf '%s\n' "$hits" | sed 's/^/    /'; bad=1; }
+    # THE RIGHT BEHAVIOUR OF THE SAME SHAPE: the manager still gets its role line, and a work write is still refused.
+    first=$(nz_lines "$s" | head -n 1)
+    case $first in 'manager-kit: you are the manager here.'*) ;; *) echo "$name: the stamp does not open with the role line of the manager: $first"; bad=1 ;; esac
+    r=$(nz_run role-guard.sh PreToolUse "$(nz_repo)" "$t" 'echo x > src/a.py')
+    case $r in *'"permissionDecision": "deny"'*) ;; *) echo "$name: a work write by the manager is no longer refused: $r" | head -n 3; bad=1 ;; esac
   done
-  grep -qF -- '.claude/manager-kit.notice' README.md || { echo 'README.md does not list .claude/manager-kit.notice'; bad=1; }
+  rm -rf "${w:?}" "${NZ_SOCKS:?}"
+  [ "$bad" = 0 ] && echo 'a manager past the old cap, in a long loop, or both, gets nothing from the guard on a call it lets through and nothing of compact, tokens, context, cap or a tool loop from the stamp, and still has its role line and its refusal'
   return $bad
 }
 
-the_record_of_the_line_is_kept_out_of_a_commit() {
-  e3_bounds || return 1
-  bad=0; w=$(mktemp -d); t=$w/t.jsonl; e3_tx "$t" in r$((E3_CAP + 1))
-  # A project whose exclusion an older version wrote, with the four names it knew and not this one.
-  d=$(e3_repo); git init -q "$d"; mkdir -p "$d/.git/info"
-  printf '/.claude/manager-kit.log*\n/.claude/manager-kit.seen\n/.claude/manager-kit.role\n/.claude/manager-exception\n' > "$d/.git/info/exclude"
-  : > "$d/.claude/manager-kit.log"
-  e3_want 'the first line in a project with a log' 1 0 "$(e3_guard "$d" "$t")" || bad=1
-  [ -f "$d/.claude/manager-kit.notice" ] || { echo 'the line left no record'; bad=1; }
-  git -C "$d" check-ignore -q .claude/manager-kit.notice || { echo 'the record of the line is not excluded'; bad=1; }
-  git -C "$d" check-ignore -q .claude/notes.md && { echo 'the exclusion swallowed a neighbour'; bad=1; }
-  return $bad
-}
-check 'the context line comes once per crossing of the cap'                the_context_line_comes_once_per_crossing_of_the_cap
-check 'the loop line comes once a loop from 8 rounds over 150k'             the_loop_line_comes_once_a_loop_from_8_rounds_over_150k
-check 'the context cap is read from MANAGER_KIT_CONTEXT_CAP'                the_context_cap_is_read_from_its_variable
-check 'the context and loop lines go to the manager and to nobody else'     the_lines_go_to_the_manager_and_to_nobody_else
-check 'the lines are silent on what they cannot read and keep the refusal'  the_line_is_silent_on_what_it_cannot_read_and_keeps_the_refusal
-check 'the refusal is the same whether a line is due or not'               the_refusal_is_the_same_whether_a_line_is_due_or_not
-check 'the lines cost under 100 ms on a transcript past 1 GB'               the_line_costs_under_100_ms_on_a_transcript_past_1_gb
-check 'the documents say how to set the context cap'                        the_documents_say_how_to_set_the_context_cap
-check 'the record of the lines is kept out of a commit'                     the_record_of_the_line_is_kept_out_of_a_commit
+check 'the kit tells the manager nothing of compact, its context or its loop' the_kit_tells_the_manager_nothing_of_compact_its_context_or_its_loop
 check 'every mutation in the register still applies' mutation_register_still_applies
 check 'every check has an entry, and every entry a check' mutation_register_names_every_check
 check 'a suite run to its end leaves nothing in its temp'              a_suite_run_to_its_end_leaves_nothing_in_its_temp

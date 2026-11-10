@@ -1,7 +1,7 @@
 {
   "name": "manager-kit",
   "displayName": "Manager Kit",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Holds the role boundary in a repository where one session coordinates and others carry. The coordinating session may write bookkeeping and hand work out; a write to a work path is refused by a hook, not by a resolution. Crossing it stays possible, and every crossing is one line on disk.",
   "author": {
     "name": "Mats Kaposty"

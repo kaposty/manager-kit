@@ -8,7 +8,7 @@
       "name": "manager-kit",
       "source": "./kit",
       "description": "Holds the role boundary where one session coordinates and other hands carry. The coordinator writes bookkeeping and hands work out; a write to a work path is refused by a hook.",
-      "version": "0.16.0"
+      "version": "0.16.1"
     }
   ],
   "description": "One plugin: the manager kit that keeps the division of labour honest."

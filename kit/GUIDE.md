@@ -794,17 +794,9 @@ by length, and the context cap `C* = S + g T*` of this machine, `T* = sqrt(2K / 
 each input, its count and where it comes from; the compaction call in K is estimated and says
 so, and a window without a compaction gives no C*, only the reason.
 
-**The line that the cap was passed.** The manager hears of its own context once, when the last
-round passes the cap, and again only after a fall under it and a new crossing; and of its own
-tool loop once, when the loop since the last input reaches 8 rounds over 150000 tokens of
-context. One line each, through `additionalContext`, saying that the person can compact at the
-next pause. The guard says it on a call it lets through, the stamp at a prompt, never inside a
-refusal, and both read the end of the transcript by the rule of the cost report. The cap is 300000
-by default, the measured cap of the machine the kit was built on, rounded; set
-`MANAGER_KIT_CONTEXT_CAP` to the `C*` that `/manager-kit:cost --context` prints for yours. A
-value that is no whole number falls back to the default and the line names it; 0 turns the
-context line off. What was said is kept in `.claude/manager-kit.notice`, and
-`hooks/_notice.sh` has the rules.
+**The kit says nothing to the manager of compacting or of the size of its context.** Whether and when to compact is the
+person's. The cost report above, `/manager-kit:cost --context`, is there when asked for, and the role text at a session start notes when
+`DISABLE_AUTO_COMPACT` is not set; neither is a message about the context of the session that reads it.
 
 ## The stop on a handed out hand
 

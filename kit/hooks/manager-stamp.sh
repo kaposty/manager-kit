@@ -12,7 +12,6 @@
 set -u
 HERE=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 . "$HERE/_identity.sh"
-. "$HERE/_notice.sh"
 input=$(cat)
 command -v python3 >/dev/null 2>&1 || exit 0
 # WHAT RAN IS ASKED, NOT ONLY WHAT IS THERE. `command -v` answers for a python3 that exists and
@@ -22,7 +21,6 @@ command -v python3 >/dev/null 2>&1 || exit 0
 parsed=$(printf '%s' "$input" | python3 -I -c "$MK_PY_INPUT"'
 say("CWD", d.get("cwd") or "")
 say("SESSION_ID", d.get("session_id") or "")
-say("TRANSCRIPT", d.get("transcript_path") or "")
 ') && [ -n "$parsed" ] || exit 0
 eval "$parsed"
 # NOT $(mk_project_root ...): a command substitution removes a newline at the end of a name, and a project called
@@ -184,9 +182,6 @@ else
 fi
 if [ "$role" = manager ]; then
   line='manager-kit: you are the manager here. Bookkeeping is .claude/ and *.md, everything else is handed out.'
-  # The context line, on a line of its own under the role line and only when it is due: hooks/_notice.sh.
-  note=$(mk_kit_notice "$ROOT" "$SESSION_ID" "${TRANSCRIPT-}" UserPromptSubmit)
-  [ -z "$note" ] || line=$line$MK_NL$note
 else
   line='manager-kit: you are a carrier here, not the manager. Do the work you were given.'
 fi

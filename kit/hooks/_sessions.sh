@@ -678,8 +678,6 @@ def mk_home(root):
 
 MK_LOG_NAME = "manager-kit.log"
 MK_KIT_IGNORE = (b"/.claude/manager-kit.log*", b"/.claude/manager-kit.seen", b"/.claude/manager-kit.role", b"/.claude/manager-exception")
-# The record of the context line and the loop line, hooks/_notice.sh, which also writes this list when it makes that file.
-MK_KIT_IGNORE += (b"/.claude/manager-kit.notice",)
 
 def mk_exclude(root):
     # Called once, right after this process made the log, and it never raises. The line goes into

@@ -4,7 +4,7 @@ by Mats Kaposty
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 [![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-blueviolet)](#install)
 [![Status: beta](https://img.shields.io/badge/status-beta-orange)](#details)
-[![Checks](https://img.shields.io/badge/checks-369-blue)](kit/README.md#verifying-it)
+[![Checks](https://img.shields.io/badge/checks-361-blue)](kit/README.md#verifying-it)
 
 **Coordinate · Delegate · Count**
 
@@ -111,7 +111,6 @@ flowchart LR
 <summary><b>Switches</b></summary>
 
 - `MANAGER_KIT_NO_ROUTING` in the environment: no handout is refused for its model. Empty and `0` count as unset.
-- `MANAGER_KIT_CONTEXT_CAP`: the context size, in tokens, at which the manager is told it can compact. Default 300000. `0` turns that line off.
 - `.claude/manager-exception`: one line of reason, one crossing. A marker older than five minutes is discarded.
 - The kit never sets these for you. It reports them.
 
