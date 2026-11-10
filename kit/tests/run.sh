@@ -25,6 +25,54 @@ REPO=$(CDPATH= cd -- "$ROOT/.." && pwd -P)
 # checks that use the name see it: "no fixture types the name of the kit" says so by name.
 KITP=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["name"])' "$ROOT/.claude-plugin/plugin.json" 2>/dev/null) || KITP=
 export KITP
+# THE ONE CLOCK OF EVERY CHECK THAT HOLDS A TIME AGAINST A LIMIT. A limit here is the budget of a hook or a latency a
+# user feels, and it is measured on a machine that also runs sessions: 2026-11-09 the public cut ran at 71 minutes
+# instead of 14 and two of these went red on a hook that had not changed. What a load does was measured on this
+# machine, not argued [8 cores, 16 and 32 CPU burners on top of the load of other sessions]: the CPU of the slowest
+# hostile command went from 2.7 s to 4.19 s and 4.59 s against a limit of 4, and the extra a 1.1 GB transcript costs in
+# wall time from 66 ms to 126 ms and 234 ms against 100, steadily (the best sample is the median), so the best of
+# several only answers a stall and not a slow machine. Hence two things, both in the number a check reads and neither in
+# its limit:
+#   1. a measure over its limit is taken again, up to ZEIT_TRIES times, and the best counts;
+#   2. a measure that stays over is held against the limit stretched by how much slower the machine is NOW than quiet,
+#      at most ZEIT_CAP times, so a slowdown beyond the cap is not excused and a regression of the sizes the register
+#      holds (14.6 s against 4, 39 s) stays red at the cap. How much slower is a probe, because a CPU time and a wall
+#      time do not slow alike: "cpu" is a bash, a python3 and an awk started (1.9 times at 32 burners, where the CPU
+#      of the hostile command went 1.7 times), "wall" is 4 million additions in python (5 to 6 times at 32 burners, where
+#      the wall extra went 2 to 3.5 times). ZEIT_QUIET is the best of 5 of each on this machine at the quietest it was
+#      [2026-11-09, 32.1 ms and 98.7 ms, the load of other sessions 3]. A slower machine is stretched for good, which is
+#      the limit read as "on a machine like this one" and no looser than the cap.
+# A check reads it with exec(os.environ["ZEIT_PY"]) and calls zeit_within(measure, limit, kind).
+ZEIT_PY='
+import os, subprocess, time
+ZEIT_TRIES, ZEIT_CAP, ZEIT_QUIET = 3, 3.0, {"cpu": 0.032, "wall": 0.098}
+def zeit_probe(kind):
+    t = time.perf_counter()
+    if kind == "wall":
+        x = 0
+        for i in range(4000000):
+            x += i
+    else:
+        subprocess.run(["bash", "-c", "python3 -I -c pass; awk \"BEGIN{x=1}\" </dev/null"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    return time.perf_counter() - t
+def zeit_factor(kind):
+    return min(ZEIT_CAP, max(1.0, min(zeit_probe(kind) for _ in range(5)) / ZEIT_QUIET[kind]))
+def zeit_within(measure, limit, kind, tries=ZEIT_TRIES):
+    """measure(f) -> seconds, f being the factor found by the try before (1.0 at the first). Returns (inside, best,
+    factor, tries used): inside when the best of up to `tries` is under the limit, or under the limit stretched by the
+    factor of the machine at that moment. A measure that is quiet and fast costs one call and no probe."""
+    best, f = None, 1.0
+    for n in range(1, tries + 1):
+        t = measure(f)
+        best = t if best is None else min(best, t)
+        if best <= limit:
+            return True, best, 1.0, n
+        f = zeit_factor(kind)
+        if best <= limit * f:
+            return True, best, f, n
+    return False, best, f, tries
+'
+export ZEIT_PY
 FAILED=0
 PASSED=0
 
@@ -2809,6 +2857,7 @@ classifier_keeps_the_hook_budget_on_hostile_commands() {
   case $limit in ''|*[!0-9]*) echo "no single MK_READ_LIMIT=<number> was read out of hooks/_classify.sh: '$limit'"; return 1 ;; esac
   python3 -I - "$ROOT" "$limit" <<'PY'
 import os, re, resource, signal, subprocess, sys, tempfile
+exec(os.environ["ZEIT_PY"])
 root, limit = sys.argv[1], int(sys.argv[2])
 CPU_MAX, WALL_KILL = 4.0, 20
 d = os.path.realpath(tempfile.mkdtemp(prefix="r1t."))
@@ -2837,32 +2886,40 @@ for i, c in enumerate(cases):
         forms.append(("table line %d" % i, c + "; "))
 # One shape that is not a unit repeated: bodies inside bodies, as deep as the text is long.
 forms.append(("shell bodies inside shell bodies", None))
-slow, bad = ("", 0.0), 0
+slow, bad, tries = ("", 0.0, 1.0), 0, ZEIT_TRIES
 for name, unit in forms:
     if unit is None:
         n = size // 8
         text = 'sh -c "' * n + 'x' + '"' * n
     else:
         text = (unit * (size // len(unit) + 1))[:size]
-    r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
-    p = subprocess.Popen(["bash", drv, root], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                         stderr=subprocess.DEVNULL, cwd=d, start_new_session=True)
-    try:
-        out, _ = p.communicate(text.encode("utf-8", "surrogateescape"), timeout=WALL_KILL)
-        verdict = out.decode().strip()
-    except subprocess.TimeoutExpired:
-        os.killpg(p.pid, signal.SIGKILL); p.communicate(); verdict = "no answer"
-    r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
-    cpu = (r1.ru_utime + r1.ru_stime) - (r0.ru_utime + r0.ru_stime)
-    if cpu > slow[1]: slow = (name, cpu)
-    if verdict not in ("work", "bookkeeping") or cpu > CPU_MAX:
-        if verdict in ("work", "bookkeeping"):
-            print("%s: %d characters, %.1f s of CPU against %.0f" % (name, len(text), cpu, CPU_MAX))
+    seen = {}
+    def once(f):
+        # CPU of the child, and no answer inside WALL_KILL (stretched by what the last try found) counts as unbounded.
+        r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+        p = subprocess.Popen(["bash", drv, root], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                             stderr=subprocess.DEVNULL, cwd=d, start_new_session=True)
+        try:
+            out, _ = p.communicate(text.encode("utf-8", "surrogateescape"), timeout=WALL_KILL * f)
+            seen["verdict"] = out.decode().strip()
+        except subprocess.TimeoutExpired:
+            os.killpg(p.pid, signal.SIGKILL); p.communicate(); seen["verdict"] = "no answer"
+        r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+        cpu = (r1.ru_utime + r1.ru_stime) - (r0.ru_utime + r0.ru_stime)
+        return cpu if seen["verdict"] in ("work", "bookkeeping") else float("inf")
+    inside, cpu, f, used = zeit_within(once, CPU_MAX, "cpu", tries)
+    if cpu != float("inf") and cpu > slow[1]: slow = (name, cpu, f)
+    if not inside:
+        # the first form that stays over its limit has had its tries; the rest are asked once, as they always were
+        tries = 1
+        if cpu != float("inf"):
+            print("%s: %d characters, %.1f s of CPU against %.0f, the best of %d, the machine %.1f times slower than quiet" % (name, len(text), cpu, CPU_MAX, used, f))
         else:
-            print("%s: %d characters, no answer in %d s" % (name, len(text), WALL_KILL))
+            print("%s: %d characters, no answer in %.0f s or a verdict that is neither work nor bookkeeping (%s), %d tries" % (name, len(text), WALL_KILL * f, seen["verdict"][:20], used))
         bad = 1
 if not bad:
-    print("%d hostile commands of %d characters, the slowest (%s) took %.2f s of CPU against %.0f" % (len(forms), size, slow[0], slow[1], CPU_MAX))
+    print("%d hostile commands of %d characters, the slowest (%s) took %.2f s of CPU against %.0f%s" % (len(forms), size, slow[0], slow[1], CPU_MAX,
+          "" if slow[2] == 1.0 else ", the machine %.1f times slower than quiet" % slow[2]))
 sys.exit(bad)
 PY
 }
@@ -2912,11 +2969,17 @@ a_command_naming_too_many_targets_is_not_let_through() {
   bad=0
   many() { awk -v n="$1" -v t="$2" 'BEGIN { for (i = 1; i <= n; i++) printf "rm .claude/a%d.txt; ", i; printf "%s", t }'; }
   d=$(newrepo); cd "${d:?}" || return 1
-  t0=$(date +%s)
-  g=$(classify_bash "$(many "$tl" 'echo done')")
-  secs=$(( $(date +%s) - t0 ))
+  # The seconds are the best of three while they are over the limit: a stall of the machine is not the hook (ZEIT_PY says why).
+  cmd=$(many "$tl" 'echo done'); secs=99; tried=0
+  while [ "$tried" -lt 3 ] && [ "$secs" -ge 6 ]; do
+    t0=$(date +%s)
+    g=$(classify_bash "$cmd")
+    s1=$(( $(date +%s) - t0 ))
+    [ "$s1" -lt "$secs" ] && secs=$s1
+    tried=$((tried + 1))
+  done
   [ "$g" = bookkeeping ] || { echo "$tl bookkeeping targets, the limit itself -> $g, expected bookkeeping"; bad=1; }
-  [ "$secs" -lt 6 ] || { echo "$tl targets took ${secs}s to judge, the hook budget is 10s"; bad=1; }
+  [ "$secs" -lt 6 ] || { echo "$tl targets took ${secs}s to judge at best of $tried, the hook budget is 10s"; bad=1; }
   g=$(classify_bash "$(many "$((tl - 1))" 'rm src/a.py')"); [ "$g" = work ] || { echo "a work target behind $((tl - 1)) others, $tl in all -> $g, expected work"; bad=1; }
   g=$(classify_bash "$(many "$((tl + 1))" 'echo done')"); [ "$g" = work ] || { echo "$((tl + 1)) targets, one past the limit -> $g, expected work"; bad=1; }
   w=$(MK_EXPLAIN=1 classify_bash "$(many "$((tl + 1))" 'echo done')" 2>&1 >/dev/null | tail -1)
@@ -2931,24 +2994,31 @@ a_command_naming_too_many_targets_is_not_let_through() {
   [ "$(wc -c < "$d/big.txt")" -lt "$rl" ] || { echo "the long command is not under MK_READ_LIMIT $rl, so it is the size that refuses it"; bad=1; }
   cat > "$d/cpu.py" <<'PY'
 import os, resource, signal, subprocess, sys
+exec(os.environ["ZEIT_PY"])
 root, d = sys.argv[1], sys.argv[2]
 open(d + "/drv.sh", "w").write('. "$1/hooks/_classify.sh"\nc=$(cat)\nclassify_bash "$c"\n')
-r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
-p = subprocess.Popen(["bash", d + "/drv.sh", root], stdin=open(d + "/big.txt"), stdout=subprocess.PIPE,
-                     stderr=subprocess.DEVNULL, cwd=d, text=True, start_new_session=True)
-try:
-    out, _ = p.communicate(timeout=30); v = out.strip()
-except subprocess.TimeoutExpired:
-    os.killpg(p.pid, signal.SIGKILL); p.communicate(); v = "no answer in 30 s"
-r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
-print("%s %.2f" % (v, (r1.ru_utime + r1.ru_stime) - (r0.ru_utime + r0.ru_stime)))
+said = {}
+def once(f):
+    # the CPU of the child; no answer inside 30 s (stretched by what the last try found) counts as unbounded
+    r0 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    p = subprocess.Popen(["bash", d + "/drv.sh", root], stdin=open(d + "/big.txt"), stdout=subprocess.PIPE,
+                         stderr=subprocess.DEVNULL, cwd=d, text=True, start_new_session=True)
+    try:
+        out, _ = p.communicate(timeout=30 * f); said["v"] = out.strip()
+    except subprocess.TimeoutExpired:
+        os.killpg(p.pid, signal.SIGKILL); p.communicate(); said["v"] = "no answer in %d s" % (30 * f)
+    r1 = resource.getrusage(resource.RUSAGE_CHILDREN)
+    return (r1.ru_utime + r1.ru_stime) - (r0.ru_utime + r0.ru_stime) if said["v"] == "work" else float("inf")
+inside, cpu, f, used = zeit_within(once, 4.0, "cpu")
+print("%s %.2f %d %.1f %d" % (said["v"].replace(" ", "_"), cpu, 1 if inside else 0, f, used))
 PY
   cpu=$(python3 -I "$d/cpu.py" "$ROOT" "$d")
-  case $cpu in
-    'work '*) awk -v c="${cpu#work }" 'BEGIN { exit !(c + 0 < 4.0) }' || { echo "7900 targets took ${cpu#work} s of CPU, the hook budget is 10 s"; bad=1; } ;;
-    *) echo "7900 targets, under MK_READ_LIMIT: ${cpu% *}, expected work inside the budget (CPU of the child ${cpu##* } s)"; bad=1 ;;
+  set -- $cpu
+  case $1 in
+    work) [ "$3" = 1 ] || { echo "7900 targets took $2 s of CPU at best of $5, the machine $4 times slower than quiet, the hook budget is 10 s"; bad=1; } ;;
+    *) echo "7900 targets, under MK_READ_LIMIT: ${1//_/ }, expected work inside the budget (CPU of the child $2 s)"; bad=1 ;;
   esac
-  [ "$bad" = 0 ] && echo "limit $tl read from _classify.sh: past it refused, at it read as before, 7900 targets in ${cpu#work } s of CPU"
+  [ "$bad" = 0 ] && echo "limit $tl read from _classify.sh: past it refused, at it read as before, the limit judged in ${secs} s, 7900 targets in $2 s of CPU against 4$([ "$4" = 1.0 ] || echo ", the machine $4 times slower than quiet")"
   return $bad
 }
 
@@ -9089,15 +9159,27 @@ for label, sub, kw in (("pass", hand, {}), ("stop", PREFIX + ":" + (REPAIR or "x
     marks = shape(rec["reason"])[1].get("order")
     if marks != "len:500,cmd:1,accept:1":
         bad.append("%s: order=%s, expected len:500,cmd:1,accept:1" % (label, marks))
-# A MEGABYTE IN THE ORDER COSTS THE HOOK NO BUDGET, the shape a careless pattern would pay for.
+# A MEGABYTE IN THE ORDER COSTS THE HOOK NO BUDGET, the shape a careless pattern would pay for. The time is the best of
+# three, the way every limit on a clock is held here (ZEIT_PY): 2026-11-09 one order of 900000 characters read 49.9 s
+# once, in a suite that took 71 minutes instead of 14, and read about a second each time it was asked alone.
+exec(os.environ["ZEIT_PY"])
+slowest, tries = (0.0, 1.0), ZEIT_TRIES
 for p in ("`" * 1000000, "`a " * 300000, "a" * 1000000, "`./" + "a" * 1000000, "`\n" * 400000):
-    t0 = time.time()
-    got = mark(p)
-    if time.time() - t0 > 5:
-        bad.append("an order of %d characters took %.1f s" % (len(p), time.time() - t0))
+    got = {}
+    def once(f):
+        t0 = time.perf_counter()
+        got.clear()
+        got.update(mark(p))
+        return time.perf_counter() - t0
+    inside, took, f, used = zeit_within(once, 5.0, "wall", tries)
+    slowest = max(slowest, (took, f))
+    if not inside:
+        tries = 1   # the first order that stays over has had its tries, the others are asked once
+        bad.append("an order of %d characters took %.1f s at best of %d, the machine %.1f times slower than quiet" % (len(p), took, used, f))
     if got.get("len") != "more":
         bad.append("an order of %d characters: %r" % (len(p), got))
-finish(bad, "edges of the length, commands and words in both directions, no word of the order on three paths")
+finish(bad, "edges of the length, commands and words in both directions, no word of the order on three paths, the slowest megabyte order %.2f s against 5%s" % (
+    slowest[0], "" if slowest[1] == 1.0 else ", the machine %.1f times slower than quiet" % slowest[1]))
 ' "$ROOT"
 }
 
@@ -12507,17 +12589,26 @@ a_command_too_large_to_read_is_not_let_through() {
   bad=0
   w=$(mktemp -d)
   big_run() {  # <kind> <size> -> verdict word in $v, seconds in $secs, project in $p
-    p=$(newrepo); still_big_payload "$p" "$1" "$2" "$w/in.json" || return 1
-    t0=$(date +%s)
-    still_run role-guard.sh "$p" "$(cat "$w/in.json")"
-    secs=$(( $(date +%s) - t0 ))
+    # the seconds are the best of three while over the limit, the way every limit on a clock is held here (ZEIT_PY). Each
+    # try has a project of its own: the refusal counts the stops on the record of its project, and a second ask of the
+    # same one says "Stops 2" [found 2026-11-10: the check went red under load on exactly that].
+    secs=99; tried=0
+    while [ "$tried" -lt 3 ] && [ "$secs" -ge 5 ]; do
+      p=$(newrepo); still_big_payload "$p" "$1" "$2" "$w/in.json" || return 1
+      t0=$(date +%s)
+      still_run role-guard.sh "$p" "$(cat "$w/in.json")"
+      s1=$(( $(date +%s) - t0 ))
+      [ "$s1" -lt "$secs" ] && secs=$s1
+      tried=$((tried + 1))
+    done
     case $still_out in *'"permissionDecision": "deny"'*) v=deny ;; '') v=silent ;; *) v=other ;; esac
   }
   # 1. A LINE past the limit, writing only bookkeeping: unreadable is not let through, and
   #    it comes back at once. 300000 is the length measured at 15 s against a budget of 10.
   big_run line-notes 300000 || return 1
+  first_secs=$secs
   [ "$v" = deny ] || { echo "a 300000 character line was $v, not refused"; bad=1; }
-  [ "$secs" -lt 5 ] || { echo "a 300000 character line took ${secs}s to judge, the hook budget is 10s"; bad=1; }
+  [ "$secs" -lt 5 ] || { echo "a 300000 character line took ${secs}s to judge at best of $tried, the hook budget is 10s"; bad=1; }
   grep -q 'too long to read' "$p/.claude/manager-kit.log" && grep -q "$limit" "$p/.claude/manager-kit.log" ||
     { echo "the stop line does not say the command was too long to read, with the limit $limit"; bad=1; }
   big_run line-notes $((limit + 1)) || return 1
@@ -12539,7 +12630,7 @@ a_command_too_large_to_read_is_not_let_through() {
   big_run heredoc-notes 1200000 || return 1
   [ "$v" = silent ] || { echo "a 1.2 MB heredoc writing only .claude/notes.md was $v, it is bookkeeping"; bad=1; }
   if grep -q '"event": "stop"' "$p/.claude/manager-kit.log" 2>/dev/null; then echo "a bookkeeping heredoc left a stop line"; bad=1; fi
-  [ "$bad" = 0 ] && echo "limit $limit read from _classify.sh: past it refused at once, at it read as before, a 1.2 MB heredoc judged by its command"
+  [ "$bad" = 0 ] && echo "limit $limit read from _classify.sh: past it refused in $first_secs s (budget 5), at it read as before, a 1.2 MB heredoc judged by its command"
   return $bad
 }
 
@@ -15030,13 +15121,16 @@ def linear():
             bad.append("the test names a pattern %s that the redactor does not hold" % k)
     window = ns.get("MK_REDACT_WINDOW", 65536)
 
+    def once(text):
+        # CPU of this process, not the wall clock: under load a text that takes longer than a time slice is taken off the
+        # core several times and a short one is not, so the wall ratio of two sizes grows with the load (measured under 32
+        # CPU burners: 16 to 30 for patterns that are linear, where the CPU ratio is what linear means).
+        a = time.process_time()
+        red(text)
+        return time.process_time() - a
+
     def best(text):
-        t = []
-        for _ in range(3):
-            a = time.perf_counter()
-            red(text)
-            t.append(time.perf_counter() - a)
-        return min(t)
+        return min(once(text) for _ in range(3))
     worst = ("", 0.0)
     n_inputs = 0
     for k, units in sorted(HOSTILE.items()):
@@ -15049,6 +15143,16 @@ def linear():
                 bad.append("%s on %r is not linear: %d characters took %.1f ms" % (k, unit[:24], len(small), ts * 1000))
                 continue
             tl = best(large)
+            # LINEAR IS A RATIO, and a load that comes and goes lands on the small text and not on the large one: 2026-11-09
+            # under 32 CPU burners _BEARER read 5.3 ms for 16384 characters and 88 ms for 65536, a ratio of 16 for a pattern
+            # that is linear. While the ratio is over 10 the two are asked again in turn, three rounds at most, and each
+            # keeps its best. A pattern that is not linear stays over 10 in every round (a square gives 16 at every size).
+            for _ in range(3):
+                if tl <= 0.02 or tl > 2.0 or tl / max(ts, 1e-6) <= 10:   # past 2 s is red with no ratio, and asking again costs seconds
+                    break
+                for _ in range(3):
+                    ts = min(ts, once(small))
+                    tl = min(tl, once(large))
             if tl > worst[1]:
                 worst = ("%s %r" % (k, unit[:20]), tl)
             if tl > 2.0 or (tl > 0.02 and tl / max(ts, 1e-6) > 10):
@@ -18896,7 +19000,8 @@ the_line_costs_under_100_ms_on_a_transcript_past_1_gb() {
   # written into the hole every megabyte cost 546 MB of disk on APFS [measured 2026-11-08], so the hole stays one
   # line, and the reader keeps no more of a line than it reaches. Made and removed in this check.
   python3 -I - "$w/big.jsonl" "$d" "$E3_SOCKS" "$ROOT/hooks/role-guard.sh" "$ROOT/hooks/manager-stamp.sh" <<'PY'
-import json, os, signal, statistics, subprocess, sys, time
+import json, os, signal, subprocess, sys, time
+exec(os.environ["ZEIT_PY"])
 big, d, socks, guard, stamp = sys.argv[1:]
 try:
     with open(big, "wb") as fh:
@@ -18928,11 +19033,20 @@ try:
         if hook == guard and "manager-kit: the context is 401003 tokens" not in took.out:
             print("the guard did not say the line on the 1.1 GB transcript: %r" % took.out[:300])
             bad = 1
-        with_ = statistics.median(took(hook, event, big) for _ in range(7))
-        without = statistics.median(took(hook, event, "") for _ in range(7))
-        extra = (with_ - without) * 1000
-        print("%s: %.0f ms with the 1.1 GB transcript, %.0f ms without, %.0f ms more" % (os.path.basename(hook), with_ * 1000, without * 1000, extra))
-        if extra >= 100:
+        # The two paths are asked in turn, so a load that comes and goes lands on both, and each is its best: a load only
+        # adds. A load that stays is answered by zeit_within, which holds the extra against 100 ms stretched by the machine.
+        def more(f):
+            with_, without = [], []
+            for _ in range(7):
+                with_.append(took(hook, event, big))
+                without.append(took(hook, event, ""))
+            more.seen = (min(with_), min(without))
+            return min(with_) - min(without)
+        inside, extra, f, used = zeit_within(more, 0.100, "wall")
+        print("%s: %.0f ms with the 1.1 GB transcript, %.0f ms without, %.0f ms more against 100%s" % (
+            os.path.basename(hook), more.seen[0] * 1000, more.seen[1] * 1000, extra * 1000,
+            "" if f == 1.0 else ", the machine %.1f times slower than quiet, %d tries" % (f, used)))
+        if not inside:
             bad = 1
     sys.exit(bad)
 finally:

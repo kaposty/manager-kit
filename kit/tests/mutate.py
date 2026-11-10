@@ -1643,6 +1643,12 @@ MUTATIONS = [
     ("a route line counts the order and carries none of it", "hooks/_routing.sh",
      """    if not isinstance(text, str):\n        return "(other)"\n""", ""),
 
+    # MK-ZEIT: an order past 100000 characters costs the hook 8 s, against the 5 the check allows, in every try. The stall
+    # that the check now survives (one try slow, the next not) is a different thing and is shown in the report.
+    ("a route line counts the order and carries none of it", "hooks/_routing.sh",
+     '    n = len(text)\n    size = "0" if n == 0',
+     '    n = len(text)\n    if n > 100000:\n        import time; time.sleep(8)\n    size = "0" if n == 0'),
+
     # THE SENTENCES, each put back or cut in the file it stands in. The search is over the package.
     ("the documents say what the refusal is", "GUIDE.md",
      "Haiku on the repair hand `xhigh` is refused\nby", "A cheap model driving a hand whose definition carries high effort is refused\nby"),
@@ -2291,6 +2297,10 @@ MUTATIONS = [
     ("a command too large to read is not let through", "hooks/role-guard.sh",
      "out=$(printf '%s' \"$subject\" 2>/dev/null |\n  MK_MARKER=$MARKER",
      "out=$(printf '%s' \"$subject\" 2>/dev/null |\n  MK_SUBJECT=$subject MK_MARKER=$MARKER"),
+    # MK-ZEIT: the refusal of a command past the limit takes 8 s, against the 5 the check allows, in every try.
+    ("a command too large to read is not let through", "hooks/_classify.sh",
+     '  if [ "${#_s}" -gt "$MK_READ_LIMIT" ]; then\n',
+     '  if [ "${#_s}" -gt "$MK_READ_LIMIT" ]; then\n    sleep 8\n'),
     # THE BROKEN INTERPRETER ANSWERED WITH NOTHING, where the missing one speaks.
     ("a python3 that does not run is said out loud like a missing one", "hooks/role-guard.sh",
      "  printf '%s\\n' '{\"systemMessage\":\"manager-kit: the role guard is inert, python3 is on PATH but does not run.\"}'\n",
@@ -3201,6 +3211,13 @@ MUTATIONS = [
     ("a hostile command is read inside the hook budget", "hooks/_classify.sh",
      '; [ "$_nq" -lt 2 ] || break ;; *) break ;; esac',
      '; ;; *) break ;; esac'),
+    # MK-ZEIT: a burn just over the limit, not a blow-up. The check holds the CPU of a command of the forms' length against
+    # 4 s, asks again what is over and stretches the limit by how much slower the machine is than quiet; the entries above
+    # are far past any stretch the cap allows, this one is the size a stretch could excuse, and at the quiet of a run
+    # of its own (stretch 1) it must stay red. 900000 turns of a bash 3.2 loop are about 2.4 s of CPU on top of the 2.7.
+    ("a hostile command is read inside the hook budget", "hooks/_classify.sh",
+     'classify_bash() {\n  _c=${1-}\n',
+     'classify_bash() {\n  _c=${1-}\n  if [ "${#_c}" -gt 60000 ]; then _i=0; while [ "$_i" -lt 900000 ]; do _i=$((_i + 1)); done; fi\n'),
     # MK-R1: the walk back to the -c in front of a quote. The first is the first repair of the budget, the last 64
     # characters, put back: a -c behind 70 blanks or inside an option of 70 letters is not found and its body is
     # text. The other two are the loud answers of the window of cmdwin characters, which the shapes past it need.
@@ -3236,6 +3253,11 @@ MUTATIONS = [
      "  _mk_nt=0\n  _mk_ifs=$IFS\n",
      "  _mk_nt=0\n  if [ -n \"$_targets\" ]; then\n    _mk_nl=${_targets//$'\\n'/}\n"
      "    if [ $(( ${#_targets} - ${#_mk_nl} )) -ge \"$MK_TARGET_LIMIT\" ]; then printf 'work\\n'; return 0; fi\n  fi\n  _mk_ifs=$IFS\n"),
+    # MK-ZEIT: eight seconds at the target that is the limit, against the six the check allows a command of that many. Not a
+    # sleep on every call: only a command that reaches the limit pays, so the rest of the suite is not slowed with it.
+    ("a command naming too many targets is not let through", "hooks/_classify.sh",
+     '    _mk_nt=$((_mk_nt + 1))\n    if [ "$_mk_nt" -gt "$MK_TARGET_LIMIT" ]; then',
+     '    _mk_nt=$((_mk_nt + 1))\n    if [ "$_mk_nt" -eq "$MK_TARGET_LIMIT" ]; then sleep 8; fi\n    if [ "$_mk_nt" -gt "$MK_TARGET_LIMIT" ]; then'),
     ("a target is read alike under any locale", "hooks/_classify.sh",
      '  _s=$(printf \'%s\' "$_c" | LC_ALL=C awk -v explain="${MK_EXPLAIN:-0}" "$_mk_p"\'',
      '  _s=$(printf \'%s\' "$_c" | awk -v explain="${MK_EXPLAIN:-0}" "$_mk_p"\''),
@@ -4006,6 +4028,12 @@ MUTATIONS = [
     # THE TIME: a reader that goes back to the start of the file, in steps, with no reach.
     ("the lines cost under 100 ms on a transcript past 1 GB", "hooks/_notice.sh",
      "        while pos > 0 and end - pos < reach:\n", "        while pos > 0:\n"),
+    # MK-ZEIT: 80 ms in the reader on every call that has a transcript, which puts the extra at about 146 against 100. Small
+    # on purpose: the entry above reads the whole file, and the stretch of the check (at most 3, and 1 when quiet) could
+    # excuse a small one under load but must not on the quiet of a run of its own.
+    ("the lines cost under 100 ms on a transcript past 1 GB", "hooks/_notice.sh",
+     "        while pos > 0 and end - pos < reach:\n",
+     "        __import__(\"time\").sleep(0.08)\n        while pos > 0 and end - pos < reach:\n"),
     # THE DOCUMENTS: a default the documents do not name, and a README that does not name the variable.
     ("the documents say how to set the context cap", "hooks/_notice.sh",
      "MK_CONTEXT_CAP_DEFAULT=300000\n", "MK_CONTEXT_CAP_DEFAULT=310000\n"),
